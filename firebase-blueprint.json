@@ -1,0 +1,44 @@
+{
+  "entities": {
+    "Extraction": {
+      "title": "Extraction Result",
+      "description": "Text items extracted from video/GIF",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "items": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "sourceFileName": { "type": "string" }
+      },
+      "required": ["userId", "createdAt", "items"]
+    },
+    "ReferenceDB": {
+      "title": "Reference Database",
+      "description": "Stored reference data for matching",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "name": { "type": "string" },
+        "data": {
+          "type": "array",
+          "items": { "type": "object" }
+        },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "name", "data"]
+    }
+  },
+  "firestore": {
+    "extractions": {
+      "schema": "Extraction",
+      "description": "Collection for extracted text results"
+    },
+    "reference_dbs": {
+      "schema": "ReferenceDB",
+      "description": "Collection for reference databases"
+    }
+  }
+}

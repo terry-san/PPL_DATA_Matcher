@@ -1,0 +1,66 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 0. Default Deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- Helpers ---
+    function isSignedIn() { return request.auth != null; }
+    function isEmailVerified() { return isSignedIn() && request.auth.token.email_verified == true; }
+    function isOwner(userId) { return isSignedIn() && request.auth.uid == userId; }
+    
+    // Pillar 4: Tiered Identity Logic
+    // Bootstrapped admin + dynamic admin lookup
+    function isAdmin() {
+      return isSignedIn() && (
+        request.auth.token.email == "kwang0923@gmail.com" ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
+    }
+
+    // Pillar 3: Path Variable Hardening
+    function isValidId(id) { 
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); 
+    }
+
+    function incoming() { return request.resource.data; }
+    function existing() { return resource.data; }
+
+    // Pillar 2: Validation Blueprints
+    function isValidExtraction(data) {
+      return data.userId is string &&
+             data.userId == request.auth.uid &&
+             data.createdAt is timestamp &&
+             data.items is list &&
+             data.items.size() <= 1000 &&
+             (data.keys().hasAll(['userId', 'createdAt', 'items', 'results', 'dbName']) || data.keys().hasAll(['userId', 'createdAt', 'items', 'results']));
+    }
+
+    // --- Collections ---
+    
+    match /admins/{adminId} {
+      // Allow users to check if they are in the admin list
+      allow get: if isSignedIn() && (request.auth.uid == adminId || isAdmin());
+      allow list: if isAdmin();
+    }
+
+    match /extractions/{extractionId} {
+      // Allow creation only for verified users
+      allow create: if isEmailVerified() && isValidExtraction(incoming());
+      
+      // Pillar 8: Secure List Queries
+      allow list: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow get: if isOwner(resource.data.userId) || isAdmin();
+      
+      allow delete: if isAdmin() || isOwner(resource.data.userId);
+    }
+
+    match /reference_dbs/{dbId} {
+      allow create: if isEmailVerified();
+      allow read: if isOwner(resource.data.userId) || isAdmin();
+      allow delete: if isOwner(resource.data.userId) || isAdmin();
+    }
+  }
+}
