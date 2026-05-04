@@ -552,10 +552,15 @@ export default function App() {
                                   </div>
                                 </td>
                                 <td className="px-8 py-8 text-right align-top">
-                                  {isMatched ? (
+                                  {row.status === 'MATCHED' ? (
                                     <span className="inline-flex items-center px-4 py-1.5 bg-green-50 text-green-700 text-[10px] font-black rounded-full border border-green-200 shadow-sm uppercase tracking-widest">
                                       <Check className="w-3 h-3 mr-1" />
                                       Verified
+                                    </span>
+                                  ) : row.status === 'UNMATCHED_DB' ? (
+                                    <span className="inline-flex items-center px-4 py-1.5 bg-amber-50 text-amber-700 text-[10px] font-black rounded-full border border-amber-200 uppercase tracking-widest">
+                                      <Database className="w-3 h-3 mr-1" />
+                                      DB Entry
                                     </span>
                                   ) : (
                                     <span className="inline-flex items-center px-4 py-1.5 bg-slate-50 text-slate-400 text-[10px] font-black rounded-full border border-slate-200 uppercase tracking-widest">
@@ -649,7 +654,15 @@ function VideoUploader({ onExtracted, setIsProcessing }: { onExtracted: (items: 
 
   const processVideo = async () => {
     if (!file) return;
+    
+    // Safety check for file size (Gemini inlineData limit is roughly 20MB, we'll cap at 15MB for safety)
+    if (file.size > 15 * 1024 * 1024) {
+      setError("File is too large (>15MB). Please try a shorter or lower resolution clip.");
+      return;
+    }
+
     setIsProcessing(true);
+    setError(null);
     try {
       // Helper to convert File to Base64
       const convertToBase64 = (file: File): Promise<string> => {
@@ -670,12 +683,16 @@ function VideoUploader({ onExtracted, setIsProcessing }: { onExtracted: (items: 
       // Clean and distill the items
       const cleanedItems = items
         .map(i => i.trim())
-        .filter(i => i.length > 2);
+        .filter(i => i.length > 1);
       
+      if (cleanedItems.length === 0) {
+        throw new Error("No text items could be identified in the footage.");
+      }
+
       onExtracted(Array.from(new Set(cleanedItems)));
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      setError("Analysis failed. System overflow.");
+      setError(err.message || "Analysis failed. System overflow.");
     } finally {
       setIsProcessing(false);
     }
