@@ -70,6 +70,8 @@ export default function App() {
   const [results, setResults] = useState<any[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
+  const [confirmDeleteIndex, setConfirmDeleteIndex] = useState<number | null>(null);
+  const [isConfirmingDiscard, setIsConfirmingDiscard] = useState(false);
   const [editValue, setEditValue] = useState("");
 
   const handleEditStart = (index: number, value: string) => {
@@ -270,7 +272,7 @@ export default function App() {
             <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center shadow-lg shadow-indigo-200 transition-transform active:scale-90">
               <Layers className="text-white w-5 h-5" />
             </div>
-            <span className="font-bold text-xl tracking-tight text-slate-800">InsightMapper</span>
+            <span className="font-bold text-xl tracking-tight text-slate-800">PPL DATA MATCHER APP</span>
           </div>
           
           <div className="flex items-center space-x-6">
@@ -336,19 +338,56 @@ export default function App() {
 
               {step === 'video' && (
                 <div className="space-y-6">
-                  <SectionTitle title="Media Intelligence" subtitle="System scans temporal nodes for unique textual identifiers." />
-                  <div className="bg-white rounded-[40px] p-10 border border-slate-200 shadow-sm">
-                    <VideoUploader 
-                      onExtracted={(items) => {
-                        setExtractedItems(items);
-                        // PERSISTENCE: Items are merged with selected if coming from a new scan
-                        const current = new Set(selectedItems);
-                        items.forEach(i => current.add(i));
-                        setSelectedItems(current);
-                        setStep('confirm');
-                      }}
-                      setIsProcessing={setIsProcessing}
-                    />
+                  <SectionTitle title="Media Intelligence" subtitle="System scans temporal nodes for unique textual identifiers or accepts manual list uploads." />
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <div className="bg-white rounded-[40px] p-10 border border-slate-200 shadow-sm fle-1">
+                      <h3 className="text-xl font-black text-slate-800 uppercase italic mb-6">Video Stream Scan</h3>
+                      <VideoUploader 
+                        onExtracted={(items) => {
+                          setExtractedItems(items);
+                          const current = new Set(selectedItems);
+                          items.forEach(i => current.add(i));
+                          setSelectedItems(current);
+                          setStep('confirm');
+                        }}
+                        setIsProcessing={setIsProcessing}
+                      />
+                    </div>
+                    <div className="bg-white rounded-[40px] p-10 border border-slate-200 shadow-sm flex-1 flex flex-col items-center justify-center">
+                      <h3 className="text-xl font-black text-slate-800 uppercase italic mb-6 w-full text-left">Direct Nodes Import</h3>
+                      <div 
+                        onClick={() => {
+                          const input = document.createElement('input');
+                          input.type = 'file';
+                          input.accept = '.csv,.xlsx,.xls';
+                          input.onchange = (e: any) => {
+                            const f = e.target.files?.[0];
+                            if (!f) return;
+                            const reader = new FileReader();
+                            reader.onload = (evt) => {
+                              const bstr = evt.target?.result;
+                              const wb = XLSX.read(bstr, { type: 'binary' });
+                              const ws = wb.Sheets[wb.SheetNames[0]];
+                              const raw: any[] = XLSX.utils.sheet_to_json(ws, { header: 1 });
+                              const items = raw.flat().filter(i => i && String(i).trim()).map(i => String(i).trim());
+                              setExtractedItems(items);
+                              const current = new Set(selectedItems);
+                              items.forEach(it => current.add(it));
+                              setSelectedItems(current);
+                              setStep('confirm');
+                            };
+                            reader.readAsBinaryString(f);
+                          };
+                          input.click();
+                        }}
+                        className="w-full flex-1 border-4 border-dashed border-slate-100 rounded-[32px] flex flex-col items-center justify-center cursor-pointer hover:bg-slate-50 hover:border-indigo-200 transition-all group p-10"
+                      >
+                        <div className="w-16 h-16 bg-slate-50 rounded-2xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform text-slate-400 group-hover:text-indigo-600">
+                          <TableIcon className="w-8 h-8" />
+                        </div>
+                        <span className="font-black text-slate-400 text-xs uppercase tracking-widest">Import CSV / XLSX List</span>
+                      </div>
+                    </div>
                   </div>
                 </div>
               )}
@@ -436,20 +475,34 @@ export default function App() {
                                 <FileEdit className="w-5 h-5" />
                               </button>
                               <button 
+                                id={`delete-node-${idx}`}
                                 onClick={() => {
-                                  if (!confirm("Permanently discard this node?")) return;
-                                  const next = [...extractedItems];
-                                  next.splice(idx, 1);
-                                  setExtractedItems(next);
-                                  if (selectedItems.has(item)) {
+                                  if (confirmDeleteIndex === idx) {
+                                    const next = [...extractedItems];
+                                    next.splice(idx, 1);
+                                    setExtractedItems(next);
+                                    
                                     const nextSel = new Set(selectedItems);
                                     nextSel.delete(item);
                                     setSelectedItems(nextSel);
+                                    setConfirmDeleteIndex(null);
+                                  } else {
+                                    setConfirmDeleteIndex(idx);
+                                    setTimeout(() => setConfirmDeleteIndex(null), 3000);
                                   }
                                 }}
-                                className="p-3 text-slate-300 hover:text-red-500 hover:bg-white rounded-xl transition-all shadow-sm border border-transparent hover:border-slate-100"
+                                className={cn(
+                                  "p-3 rounded-xl transition-all shadow-sm border border-transparent",
+                                  confirmDeleteIndex === idx 
+                                    ? "bg-red-500 text-white hover:bg-red-600" 
+                                    : "text-slate-300 hover:text-red-500 hover:bg-white hover:border-slate-100"
+                                )}
                               >
-                                <Trash2 className="w-5 h-5" />
+                                {confirmDeleteIndex === idx ? (
+                                  <span className="text-[10px] font-black uppercase">Confirm?</span>
+                                ) : (
+                                  <Trash2 className="w-5 h-5" />
+                                )}
                               </button>
                             </div>
                           )}
@@ -457,7 +510,50 @@ export default function App() {
                       ))}
                     </div>
                     <div className="flex justify-between items-center border-t border-slate-100 pt-8">
-                      <button onClick={() => setStep('video')} className="text-sm font-black text-slate-400 hover:text-indigo-600 uppercase tracking-widest">Abort Scan</button>
+                      <div className="flex space-x-3">
+                        <button onClick={() => setStep('video')} className="text-sm font-black text-slate-400 hover:text-indigo-600 uppercase tracking-widest">Abort Scan</button>
+                        <button 
+                          onClick={() => {
+                            const data = Array.from(selectedItems).map(item => ({ "Entity": item }));
+                            const ws = XLSX.utils.json_to_sheet(data);
+                            const wb = XLSX.utils.book_new();
+                            XLSX.utils.book_append_sheet(wb, ws, "Entities");
+                            XLSX.writeFile(wb, `Verification_List_${new Date().getTime()}.xlsx`);
+                          }}
+                          className="bg-white border-2 border-slate-200 text-slate-700 px-6 py-3 rounded-xl font-black uppercase tracking-widest flex items-center mb-1 text-[10px] hover:bg-slate-50 transition-all ml-4"
+                        >
+                          <Download className="w-4 h-4 mr-2" />
+                          Export
+                        </button>
+                        <button 
+                          onClick={() => {
+                            const input = document.createElement('input');
+                            input.type = 'file';
+                            input.accept = '.csv,.xlsx,.xls';
+                            input.onchange = (e: any) => {
+                              const f = e.target.files?.[0];
+                              if (!f) return;
+                              const reader = new FileReader();
+                              reader.onload = (evt) => {
+                                const bstr = evt.target?.result;
+                                const wb = XLSX.read(bstr, { type: 'binary' });
+                                const ws = wb.Sheets[wb.SheetNames[0]];
+                                const raw: any[] = XLSX.utils.sheet_to_json(ws, { header: 1 });
+                                const items = raw.flat().filter(i => i && String(i).trim()).map(i => String(i).trim());
+                                const next = new Set(items);
+                                setExtractedItems(items);
+                                setSelectedItems(next);
+                              };
+                              reader.readAsBinaryString(f);
+                            };
+                            input.click();
+                          }}
+                          className="bg-white border-2 border-slate-200 text-slate-700 px-6 py-3 rounded-xl font-black uppercase tracking-widest flex items-center mb-1 text-[10px] hover:bg-slate-50 transition-all"
+                        >
+                          <Upload className="w-4 h-4 mr-2" />
+                          Import
+                        </button>
+                      </div>
                       <button 
                         onClick={() => setStep('database')}
                         disabled={selectedItems.size === 0}
@@ -476,6 +572,7 @@ export default function App() {
                   <SectionTitle title="Master Configuration" subtitle="Define the source-of-truth for reference mapping." />
                   <div className="bg-white rounded-[40px] p-10 border border-slate-200 shadow-sm space-y-10">
                     <DatabaseUploader 
+                      key={dbInfo ? "loaded" : "empty"}
                       onDataLoaded={(data, name) => {
                         setReferenceData(data);
                         setDbInfo({ name, size: data.length });
@@ -484,21 +581,56 @@ export default function App() {
                     />
                     
                     {dbInfo && (
-                      <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="p-6 bg-indigo-600 rounded-3xl flex items-center justify-between text-white shadow-xl shadow-indigo-100">
-                        <div className="flex items-center space-x-4">
-                          <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center">
-                            <TableIcon className="w-7 h-7" />
+                      <div className="space-y-4">
+                        <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="p-6 bg-indigo-600 rounded-3xl flex items-center justify-between text-white shadow-xl shadow-indigo-100">
+                          <div className="flex items-center space-x-4">
+                            <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center">
+                              <TableIcon className="w-7 h-7" />
+                            </div>
+                            <div>
+                              <p className="text-xs font-black opacity-60 uppercase tracking-widest mb-1">Active Catalog</p>
+                              <p className="text-xl font-black italic">{dbInfo.name}</p>
+                            </div>
                           </div>
-                          <div>
-                            <p className="text-xs font-black opacity-60 uppercase tracking-widest mb-1">Active Catalog</p>
-                            <p className="text-xl font-black italic">{dbInfo.name}</p>
+                          <div className="text-right">
+                            <p className="text-2xl font-black">{dbInfo.size.toLocaleString()}</p>
+                            <p className="text-[10px] font-black opacity-60 uppercase">Records Ready</p>
                           </div>
+                        </motion.div>
+                         <div className="flex justify-end pr-4">
+                           {isConfirmingDiscard ? (
+                             <div className="flex items-center space-x-4">
+                               <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Wipe Dataset?</span>
+                               <button 
+                                 id="confirm-discard-btn"
+                                 onClick={() => {
+                                   setReferenceData([]);
+                                   setDbInfo(null);
+                                   setIsConfirmingDiscard(false);
+                                 }}
+                                 className="text-xs font-black text-red-500 hover:underline uppercase tracking-widest"
+                               >
+                                 Confirm Delete
+                               </button>
+                               <button 
+                                 onClick={() => setIsConfirmingDiscard(false)}
+                                 className="text-xs font-black text-slate-400 hover:text-slate-600 uppercase tracking-widest"
+                               >
+                                 Cancel
+                               </button>
+                             </div>
+                           ) : (
+                             <button 
+                               id="discard-dataset-btn"
+                               onClick={() => setIsConfirmingDiscard(true)}
+                               className="flex items-center space-x-2 text-xs font-black text-red-300 hover:text-red-500 uppercase tracking-widest transition-colors"
+                             >
+                               <Trash2 className="w-4 h-4" />
+                               <span>Discard Dataset</span>
+                             </button>
+                           )}
                         </div>
-                        <div className="text-right">
-                          <p className="text-2xl font-black">{dbInfo.size.toLocaleString()}</p>
-                          <p className="text-[10px] font-black opacity-60 uppercase">Records Ready</p>
-                        </div>
-                      </motion.div>
+                      </div>
                     )}
 
                     <div className="flex justify-between items-center border-t border-slate-100 pt-8">
@@ -594,25 +726,11 @@ export default function App() {
                         <span>Export Excel</span>
                       </button>
                       <button 
-                        onClick={async () => {
-                          if (!user) return;
-                          try {
-                            await addDoc(collection(db, 'extractions'), {
-                              userId: user.uid,
-                              createdAt: serverTimestamp(),
-                              items: results.map(r => r.item),
-                              results: results,
-                              dbName: dbInfo?.name || "Manual"
-                            });
-                            alert("Stored successfully in the organizational ledger.");
-                          } catch (error) {
-                            handleFirestoreError(error, OperationType.WRITE, 'extractions');
-                          }
-                        }}
+                        onClick={() => setStep('database')}
                         className="bg-slate-900 text-white px-10 py-4 rounded-2xl font-black uppercase tracking-widest flex items-center space-x-2 shadow-2xl transition-all hover:scale-105 active:scale-95"
                       >
-                        <CheckCircle2 className="w-5 h-5" />
-                        <span>Archive Data</span>
+                        <Database className="w-5 h-5" />
+                        <span>Import New SKU</span>
                       </button>
                     </div>
                   </div>
@@ -624,12 +742,7 @@ export default function App() {
       </main>
 
       <footer className="mt-40 border-t border-slate-200 bg-white/50 py-20 text-center">
-        <div className="flex justify-center space-x-12 mb-8 opacity-20 filter grayscale">
-          <Layers className="w-8 h-8" />
-          <Database className="w-8 h-8" />
-          <ShieldCheck className="w-8 h-8" />
-        </div>
-        <p className="text-slate-400 text-xs font-black tracking-[0.3em] uppercase">Enterprise Insight Systems © 2026</p>
+        <p className="text-slate-400 text-xs font-black tracking-[0.3em] uppercase">PPL for Terry © 2026</p>
       </footer>
     </div>
   );
@@ -655,12 +768,6 @@ function VideoUploader({ onExtracted, setIsProcessing }: { onExtracted: (items: 
   const processVideo = async () => {
     if (!file) return;
     
-    // Safety check for file size (Gemini inlineData limit is roughly 20MB, we'll cap at 15MB for safety)
-    if (file.size > 15 * 1024 * 1024) {
-      setError("File is too large (>15MB). Please try a shorter or lower resolution clip.");
-      return;
-    }
-
     setIsProcessing(true);
     setError(null);
     try {
@@ -793,6 +900,8 @@ function DatabaseUploader({ onDataLoaded, currentDataLength }: { onDataLoaded: (
       const raw = XLSX.utils.sheet_to_json(ws, { defval: "" }); 
       const processed = preProcessData(raw);
       onDataLoaded(processed, f.name);
+      // Reset input value so same file can be uploaded again if discarded
+      e.target.value = '';
     };
     reader.readAsBinaryString(f);
   };
