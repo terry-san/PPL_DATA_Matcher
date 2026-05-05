@@ -69,6 +69,7 @@ export default function App() {
   const [dbInfo, setDbInfo] = useState<{ name: string; size: number } | null>(null);
   const [results, setResults] = useState<any[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [authError, setAuthError] = useState<string | null>(null);
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [confirmDeleteIndex, setConfirmDeleteIndex] = useState<number | null>(null);
   const [isConfirmingDiscard, setIsConfirmingDiscard] = useState(false);
@@ -132,10 +133,18 @@ export default function App() {
   }, []);
 
   const handleLogin = async () => {
+    setAuthError(null);
     try {
       await signInWithPopup(auth, new GoogleAuthProvider());
-    } catch (error) {
+    } catch (error: any) {
       console.error("Login failed", error);
+      if (error.code === 'auth/user-cancelled' || error.code === 'auth/cancelled-popup-request' || error.code === 'auth/popup-closed-by-user') {
+        setAuthError("Sign-in cancelled. Please ensure you complete the Google login process in the popup.");
+      } else if (error.code === 'auth/popup-blocked') {
+        setAuthError("Pop-up blocked. Please enable pop-ups for this site to sign in.");
+      } else {
+        setAuthError(error.message || "Verification failed. Check your network or project settings.");
+      }
     }
   };
 
@@ -305,9 +314,9 @@ export default function App() {
                 <div className="w-20 h-20 bg-indigo-50 rounded-2xl flex items-center justify-center mx-auto mb-8 text-indigo-600 ring-4 ring-white shadow-inner">
                   <Sparkles className="w-10 h-10" />
                 </div>
-                <h2 className="text-4xl font-black text-slate-900 mb-4 tracking-tighter italic uppercase">Analytics Gate</h2>
+                <h2 className="text-4xl font-black text-slate-900 mb-4 tracking-tighter italic uppercase">PPL DATA MATCHER</h2>
                 <p className="text-slate-500 mb-12 font-medium leading-relaxed">
-                  Enterprise-grade video frame analysis and record matching for mission-critical logistics and inventory.
+                  Terry&gt; Video frame analysis and text extraction, with data sorting and matching for PPL requirement.
                 </p>
                 <button 
                   onClick={handleLogin}
@@ -316,6 +325,17 @@ export default function App() {
                   <LogIn className="w-5 h-5" />
                   <span>Authenticate Access</span>
                 </button>
+                {authError && (
+                  <motion.div 
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    className="mt-6 p-4 bg-red-50 border border-red-100 rounded-xl"
+                  >
+                    <p className="text-red-600 text-[10px] font-black uppercase tracking-widest leading-relaxed">
+                      Error: {authError}
+                    </p>
+                  </motion.div>
+                )}
               </div>
             </motion.div>
           )}
@@ -868,7 +888,7 @@ function SectionTitle({ title, subtitle }: { title: string, subtitle: string }) 
   );
 }
 
-function DatabaseUploader({ onDataLoaded, currentDataLength }: { onDataLoaded: (data: any[], name: string) => void, currentDataLength: number }) {
+function DatabaseUploader({ onDataLoaded, currentDataLength }: { onDataLoaded: (data: any[], name: string) => void, currentDataLength: number, key?: string | number }) {
   const [pasteMode, setPasteMode] = useState(false);
   const [pasteValue, setPasteValue] = useState('');
   const fileRef = useRef<HTMLInputElement>(null);
